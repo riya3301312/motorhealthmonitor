@@ -166,7 +166,7 @@ except (KeyError, FileNotFoundError):
     st.stop()
 
 
-@st.cache_data(ttl=2, show_spinner=False)
+# Fetch fresh data on every refresh so the latest upload is immediately eligible.
 def fetch_readings():
     url = f"{SUPABASE_URL}/rest/v1/{config.TABLE}"
     params = {
@@ -187,7 +187,7 @@ def fetch_readings():
     return frame.sort_values("ts").reset_index(drop=True)
 
 
-st_autorefresh(interval=3000, key="tick")
+st_autorefresh(interval=config.DASHBOARD_REFRESH_MS, key="tick")
 
 # ----------------------------------------------------------------------
 # Header
@@ -197,7 +197,7 @@ st.markdown(
 <div>
   <p class="rig-title">Rotor Health Monitor</p>
   <p class="rig-sub">Imbalance and shaft misalignment detection &nbsp;·&nbsp;
-     Unit {config.DEVICE_ID} &nbsp;·&nbsp; refreshing every 3 s</p>
+     Unit {config.DEVICE_ID} &nbsp;·&nbsp; refreshing every {config.LIVE_INTERVAL_SEC:g} s</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -223,6 +223,7 @@ if data.empty:
     st.stop()
 
 latest = data.iloc[-1]
+st.caption(f"Latest uploaded reading (UTC): {latest['ts'].isoformat()}")
 age = (datetime.now(timezone.utc) - latest["ts"].to_pydatetime()).total_seconds()
 offline = age > config.STALE_AFTER_SEC
 

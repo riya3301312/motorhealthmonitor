@@ -12,7 +12,10 @@ actually used to raise a fault.
 DEVICE_ID = "motor-01"          # change if you ever monitor a second motor
 SERIAL_PORT = "COM3"            # Windows: COM3, COM4 ... | Linux/Mac: /dev/ttyUSB0
 BAUD_RATE = 115200
-UPLOAD_INTERVAL_SEC = 2.0       # how often the forwarder flushes to Supabase
+# Match the ESP32 SAMPLE_INTERVAL_MS (500 ms) in esp32_serial_output.ino.
+LIVE_INTERVAL_SEC = 0.5
+UPLOAD_INTERVAL_SEC = LIVE_INTERVAL_SEC
+DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 
 # ----------------------------------------------------------------------
 # Thresholds

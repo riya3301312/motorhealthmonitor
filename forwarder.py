@@ -96,7 +96,7 @@ _sim_clock = {"t": 0.0}
 
 def simulate_reading(fault=False):
     """Believable fake readings so you can build and demo before the rig works."""
-    _sim_clock["t"] += 0.5
+    _sim_clock["t"] += config.LIVE_INTERVAL_SEC
     t = _sim_clock["t"]
     drift = min(t / 90.0, 1.0) if fault else 0.0
 
@@ -145,6 +145,17 @@ def upload(batch):
     if response.status_code >= 300:
         print(f"  upload failed ({response.status_code}): {response.text[:200]}")
         return False
+    # Report the newest confirmed upload, the same row the dashboard selects.
+    # All samples (including those awaiting upload) remain in the local CSV.
+    row = max(batch, key=lambda item: item["ts"])
+    print(
+        f"Uploaded {row['ts']} (UTC)  "
+        f"{row['status']:<8} health {row['health']:>3}  "
+        f"vib {row['vibration']:6.2f} mm/s  "
+        f"temp {row['temperature']:5.1f} C  "
+        f"volt {row['voltage']:5.2f} V",
+        flush=True,
+    )
     return True
 
 
@@ -164,13 +175,13 @@ def main():
 
     buffer = []
     pending = []          # readings that failed to upload, retried next flush
-    last_flush = time.time()
+    last_flush = time.monotonic()
 
     try:
         while True:
             if args.simulate:
                 reading = simulate_reading(fault=args.fault)
-                time.sleep(0.5)
+                time.sleep(config.LIVE_INTERVAL_SEC)
             else:
                 reading = read_serial_line(port)
 
@@ -189,14 +200,8 @@ def main():
                 }
                 buffer.append(row)
                 append_local_csv(row)
-                print(
-                    f"{status:<8} health {health:>3}  "
-                    f"vib {vibration:6.2f} mm/s  "
-                    f"temp {temperature:5.1f} C  "
-                    f"volt {voltage:5.2f} V"
-                )
 
-            if time.time() - last_flush >= config.UPLOAD_INTERVAL_SEC and (buffer or pending):
+            if time.monotonic() - last_flush >= config.UPLOAD_INTERVAL_SEC and (buffer or pending):
                 batch = pending + buffer
                 if upload(batch):
                     pending = []
@@ -204,7 +209,7 @@ def main():
                     # keep the most recent 200 so memory can't run away
                     pending = batch[-200:]
                 buffer = []
-                last_flush = time.time()
+                last_flush = time.monotonic()
 
     except KeyboardInterrupt:
         print("\nStopping. Flushing anything left over...")

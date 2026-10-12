@@ -9,10 +9,10 @@ ESP32 + vibration / temperature / voltage sensors
         |  USB serial, "vibration,temperature,voltage" once per 0.5 s
         v
 forwarder.py            runs on your laptop
-        |  classifies each reading, batches, HTTPS POST every 2 s
+        |  classifies each reading, batches, HTTPS POST every 0.5 s
         v
 Supabase (Postgres)     free, permanent, holds every reading
-        |  HTTPS GET every 3 s
+        |  HTTPS GET every 0.5 s (uncached)
         v
 cloud_dashboard.py      Streamlit Community Cloud, public URL
 ```
@@ -20,6 +20,26 @@ cloud_dashboard.py      Streamlit Community Cloud, public URL
 The laptop is in the loop only as a relay. The dashboard itself lives in the
 cloud, so the link works on any phone anywhere — it just shows the motor as
 `Offline` when the forwarder is not running.
+
+## Live timing
+
+`config.LIVE_INTERVAL_SEC` sets the upload interval, dashboard refresh, and
+simulation step to 0.5 seconds, matching the supplied ESP32 sketch. Restart
+the forwarder and dashboard after changing this setting. The ESP32 sampling
+interval is configured separately in `esp32_serial_output.ino`.
+
+The terminal prints the newest reading only after each successful upload.
+Its UTC timestamp matches the dashboard's "Latest uploaded reading" timestamp
+when both show the same sample. All samples still go to the local CSV and
+are included in uploads; failed uploads retain the existing 200-row retry
+buffer. During an outage the terminal reports upload failures and the
+dashboard continues showing its last stored reading.
+
+Polling does not guarantee simultaneous screen updates or display every
+sample in the live cards. Network requests, rendering, and browser timer
+throttling can add delay; each dashboard refresh selects the newest stored
+reading. A visible dashboard now requests data up to twice per second, so
+multiple viewers increase Supabase traffic.
 
 ## Files
 
