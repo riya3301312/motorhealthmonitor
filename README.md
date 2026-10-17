@@ -82,18 +82,15 @@ extrema, not statistical confidence intervals or validated safety thresholds.
 | 4.27.44 PM: 2–3 mm sheets below bearing | 66.409–116.635 | 32.90 C | approximately 1.345–1.454 V |
 | 4.27.45 PM: original setup | 5.064–17.770 | 33.30 C | approximately 1.306–1.348 V |
 
-The observed normal range remains 5.064–17.770. At the user's request,
-the configured NORMAL band is expanded to 5.064–40.000; this extension is
-not an observed video range.
+Current configured vibration bands (set by the user, firmware units):
+HEALTHY 0.000–50.000, FAULTY 50.001–200.000, inclusive. Values below 0 or
+above 200 are unclassified and raise a WARNING; there is no gap between the
+two bands. The video ranges above are kept as reference only.
 
-`config.classify()` uses inclusive vibration reference bands: NORMAL in the
-original band, FAULT in the shim band, WARNING elsewhere (including the gap,
-values below the normal band and values above the shim band). A FAULT match
-means resemblance to this induced-misalignment reference, not proof of cause.
-These videos supersede the earlier photos, whose ranges were very different.
-Use this profile only for the same speed, mounting, load and sensor processing.
-The firmware's mm/s calibration has not been independently verified. No raw
-values are scaled, clamped, replaced or changed to force a classification.
+The bands are not validated safety limits, and a FAULTY reading does not
+prove a cause. The firmware's mm/s calibration has not been independently
+verified. No raw values are scaled, clamped or changed to force a
+classification.
 
 Existing temperature limits remain 60 C warning / 75 C fault and can escalate
 the status. The two temperature values alone do not establish new thresholds.

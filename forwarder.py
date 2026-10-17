@@ -105,8 +105,8 @@ def simulate_reading(fault=False):
     drift = min(t / 90.0, 1.0) if fault else 0.0
 
     normal_mid = (config.VIB_NORMAL_MIN + config.VIB_NORMAL_MAX) / 2
-    shim_mid = (config.VIB_MISALIGN_MIN + config.VIB_MISALIGN_MAX) / 2
-    vibration = normal_mid + drift * (shim_mid - normal_mid)
+    fault_mid = (config.VIB_MISALIGN_MIN + config.VIB_MISALIGN_MAX) / 2
+    vibration = normal_mid + drift * (fault_mid - normal_mid)
     vibration += math.sin(t / 4) + random.uniform(-0.2, 0.2)
     temperature = 33.3 - 0.4 * drift
     voltage = config.VOLT_NOMINAL if config.VOLTAGE_CALIBRATED else config.VOLT_REFERENCE
@@ -170,7 +170,7 @@ def upload(batch):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--simulate", action="store_true", help="run without hardware")
-    parser.add_argument("--fault", action="store_true", help="simulate transition from normal to shim-reference vibration")
+    parser.add_argument("--fault", action="store_true", help="simulate transition from healthy to faulty vibration")
     args = parser.parse_args()
 
     port = None if args.simulate else open_serial()

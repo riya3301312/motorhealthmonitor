@@ -18,15 +18,18 @@ UPLOAD_INTERVAL_SEC = LIVE_INTERVAL_SEC
 DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 
 # ----------------------------------------------------------------------
-# Experimental ranges read from the user's 2026-10-17 videos.
-# Bounds are inclusive; these are observed ranges, not validated safety limits.
+# Vibration bands set by the user (firmware units, 0-200 full scale):
+#     0.000   - 50.000   healthy
+#     50.001  - 200.000  faulty
+# Bounds are inclusive; anything outside 0-200 (negative, over range) is
+# unclassified and raises a WARNING. Not validated safety limits.
 # Firmware reports mm/s RMS, but its physical calibration is unverified.
 # ----------------------------------------------------------------------
-VIB_NORMAL_MIN = 5.064
+VIB_NORMAL_MIN = 0.000
 VIB_NORMAL_MAX = 50.000
-VIB_MISALIGN_MIN = 66.409
+VIB_MISALIGN_MIN = 50.001
 VIB_MISALIGN_MAX = 200.000
-CLASSIFICATION_PROFILE = "shim-reference-2026-10-17"
+CLASSIFICATION_PROFILE = "range-0-50-200-2026-10-17"
 
 TEMP_WARN = 60.0                # existing limits, not inferred from these clips
 TEMP_FAULT = 75.0
@@ -52,10 +55,10 @@ STATUS_FAULT = "FAULT"
 
 
 def vibration_status(value):
-    """Compare with the two observed ranges; do not extrapolate a diagnosis."""
+    """Healthy up to VIB_NORMAL_MAX, faulty above it up to VIB_MISALIGN_MAX."""
     if VIB_NORMAL_MIN <= value <= VIB_NORMAL_MAX:
         return STATUS_NORMAL
-    if VIB_MISALIGN_MIN <= value <= VIB_MISALIGN_MAX:
+    if VIB_NORMAL_MAX < value <= VIB_MISALIGN_MAX:  # no gap, e.g. 50.0004
         return STATUS_FAULT
     return STATUS_WARNING
 
@@ -74,11 +77,11 @@ def classify(vibration, temperature, voltage):
     status = vibration_status(vibration)
     level = {STATUS_NORMAL: 0, STATUS_WARNING: 1, STATUS_FAULT: 2}[status]
     if status == STATUS_NORMAL:
-        reasons = ["Matches original-setup vibration reference (provisional)"]
+        reasons = [f"Vibration within healthy range ({VIB_NORMAL_MIN:.3f}-{VIB_NORMAL_MAX:.3f})"]
     elif status == STATUS_FAULT:
-        reasons = ["Matches 2-3 mm shim misalignment reference (provisional)"]
+        reasons = [f"Vibration in faulty range ({VIB_MISALIGN_MIN:.3f}-{VIB_MISALIGN_MAX:.3f})"]
     else:
-        reasons = ["Outside both recorded vibration ranges; unclassified"]
+        reasons = [f"Vibration outside {VIB_NORMAL_MIN:.0f}-{VIB_MISALIGN_MAX:.0f} range; unclassified"]
 
     if temperature >= TEMP_FAULT:
         level = 2
