@@ -47,10 +47,11 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 ENDPOINT = f"{SUPABASE_URL}/rest/v1/{config.TABLE}"
 HEADERS = {
     "apikey": SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
     "Content-Type": "application/json",
     "Prefer": "return=minimal",
 }
+if not SUPABASE_KEY.startswith("sb_"):  # new-style keys aren't JWTs
+    HEADERS["Authorization"] = f"Bearer {SUPABASE_KEY}"
 
 
 # ----------------------------------------------------------------------
@@ -86,9 +87,12 @@ def read_serial_line(port):
     if len(parts) < 3:
         return None
     try:
-        return float(parts[0]), float(parts[1]), float(parts[2])
+        values = float(parts[0]), float(parts[1]), float(parts[2])
     except ValueError:
         return None  # startup banner or debug text, ignore it
+    # a failed sensor can print nan/inf; JSON can't carry them and one bad row
+    # would block every later upload
+    return values if all(math.isfinite(v) for v in values) else None
 
 
 _sim_clock = {"t": 0.0}
@@ -144,7 +148,8 @@ def upload(batch):
         return False
     if response.status_code >= 300:
         print(f"  upload failed ({response.status_code}): {response.text[:200]}")
-        return False
+        # 400/422 = the data itself is rejected; retrying would block all later batches
+        return response.status_code in (400, 422)
     # Report the newest confirmed upload, the same row the dashboard selects.
     # All samples (including those awaiting upload) remain in the local CSV.
     row = max(batch, key=lambda item: item["ts"])

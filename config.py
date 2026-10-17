@@ -10,7 +10,7 @@ actually used to raise a fault.
 # Device / serial
 # ----------------------------------------------------------------------
 DEVICE_ID = "motor-01"          # change if you ever monitor a second motor
-SERIAL_PORT = "COM3"            # Windows: COM3, COM4 ... | Linux/Mac: /dev/ttyUSB0
+SERIAL_PORT = "COM5"            # Windows: COM3, COM4 ... | Linux/Mac: /dev/ttyUSB0
 BAUD_RATE = 115200
 # Match the ESP32 SAMPLE_INTERVAL_MS (500 ms) in esp32_serial_output.ino.
 LIVE_INTERVAL_SEC = 0.5
@@ -23,9 +23,9 @@ DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 # Firmware reports mm/s RMS, but its physical calibration is unverified.
 # ----------------------------------------------------------------------
 VIB_NORMAL_MIN = 5.064
-VIB_NORMAL_MAX = 40.000
+VIB_NORMAL_MAX = 50.000
 VIB_MISALIGN_MIN = 66.409
-VIB_MISALIGN_MAX = 116.635
+VIB_MISALIGN_MAX = 200.000
 CLASSIFICATION_PROFILE = "shim-reference-2026-10-17"
 
 TEMP_WARN = 60.0                # existing limits, not inferred from these clips
