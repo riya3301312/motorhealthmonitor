@@ -70,26 +70,52 @@ SUPABASE_KEY=your-anon-public-key
 
 Never commit either file to GitHub.
 
-## Fault logic
+## Experimental reference profile (2026-10-17)
 
-Vibration is the primary indicator — imbalance shows up as a rise at 1× shaft
-speed, misalignment at 2×. Thresholds follow ISO 10816-1 Class I severity
-zones for machines under 15 kW, in mm/s RMS velocity:
+Ranges below were manually read from visible serial-monitor lines in the two
+user videos, including lines already on screen at the start. Repeated serial
+lines do not imply independent vibration measurements. These are observed
+extrema, not statistical confidence intervals or validated safety thresholds.
 
-| Zone | mm/s RMS | Meaning |
-|---|---|---|
-| A | up to 1.8 | Newly commissioned |
-| B | up to 4.5 | Fine for long-term running |
-| C | up to 11.2 | Unsatisfactory, plan a repair |
-| D | above 11.2 | Damage occurring |
+| Video / setup | Reported vibration (firmware mm/s RMS) | Temperature | Reported voltage |
+|---|---|---|---|
+| 4.27.44 PM: 2–3 mm sheets below bearing | 66.409–116.635 | 32.90 C | approximately 1.345–1.454 V |
+| 4.27.45 PM: original setup | 5.064–17.770 | 33.30 C | approximately 1.306–1.348 V |
 
-Temperature and supply voltage act as corroborating evidence, since a
-misaligned shaft loads the bearings and heats them.
+The observed normal range remains 5.064–17.770. At the user's request,
+the configured NORMAL band is expanded to 5.064–40.000; this extension is
+not an observed video range.
 
-## Next step: the AI part
+`config.classify()` uses inclusive vibration reference bands: NORMAL in the
+original band, FAULT in the shim band, WARNING elsewhere (including the gap,
+values below the normal band and values above the shim band). A FAULT match
+means resemblance to this induced-misalignment reference, not proof of cause.
+These videos supersede the earlier photos, whose ranges were very different.
+Use this profile only for the same speed, mounting, load and sensor processing.
+The firmware's mm/s calibration has not been independently verified. No raw
+values are scaled, clamped, replaced or changed to force a classification.
 
-Every reading is stored, so once the rig runs you can collect labelled data by
-running the motor normally, then with a deliberate imbalance (a small weight on
-the coupling) and a deliberate misalignment (shim one motor foot). Export the
-history from the dashboard, train a classifier on it, and replace the rule
-block in `config.classify()` — nothing else in the system has to change.
+Existing temperature limits remain 60 C warning / 75 C fault and can escalate
+the status. The two temperature values alone do not establish new thresholds.
+Reported voltage is displayed to three decimals. Supply-voltage fault checks
+are disabled (`VOLTAGE_CALIBRATED = False`) until the divider calibration and
+actual supply are verified with a multimeter. 1.306 V must not be silently
+treated as a new nominal 12 V supply. Enable the flag only after calibration.
+
+The database `health` field remains for compatibility but now represents a
+discrete experimental status score: NORMAL=100, WARNING=60, FAULT=20. It is
+not measured motor health or a probability. The dashboard labels it accordingly.
+
+The dashboard reclassifies the displayed history under the current profile,
+without rewriting Supabase. CSV exports preserve upload-time labels in
+`stored_status`, `stored_health`, `stored_note` and identify the current
+`classification_profile`. Older recordings may use different conditions and
+are not necessarily comparable. Automatic labels are not training ground truth.
+
+Restart the forwarder and dashboard together to apply the settings. The live
+cloud dashboard will not change until reviewed files are pushed and deployed.
+No firmware change or database migration is needed. Keep the 0.5-second timing.
+
+Simulation produces normal-band values; `--simulate --fault` moves through
+the unclassified gap into the shim band over 90 simulated seconds. Wall-clock
+time also includes network delays. Simulation writes to the configured table.

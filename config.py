@@ -18,26 +18,24 @@ UPLOAD_INTERVAL_SEC = LIVE_INTERVAL_SEC
 DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 
 # ----------------------------------------------------------------------
-# Thresholds
-#
-# Vibration values follow ISO 10816-1 severity zones for small machines
-# (Class I, under 15 kW), measured as RMS velocity in mm/s:
-#     up to 1.8   Zone A  newly commissioned
-#     up to 4.5   Zone B  acceptable for long-term running
-#     up to 11.2  Zone C  unsatisfactory, plan a repair
-#     above       Zone D  damage is happening now
-#
-# We warn early (2.8) and fault before Zone D (7.1) so the demo shows a
-# clear escalation rather than jumping straight from fine to broken.
+# Experimental ranges read from the user's 2026-10-17 videos.
+# Bounds are inclusive; these are observed ranges, not validated safety limits.
+# Firmware reports mm/s RMS, but its physical calibration is unverified.
 # ----------------------------------------------------------------------
-VIB_WARN = 2.8                  # mm/s RMS
-VIB_FAULT = 7.1
+VIB_NORMAL_MIN = 5.064
+VIB_NORMAL_MAX = 40.000
+VIB_MISALIGN_MIN = 66.409
+VIB_MISALIGN_MAX = 116.635
+CLASSIFICATION_PROFILE = "shim-reference-2026-10-17"
 
-TEMP_WARN = 60.0                # deg C on the bearing housing
+TEMP_WARN = 60.0                # existing limits, not inferred from these clips
 TEMP_FAULT = 75.0
 
-VOLT_NOMINAL = 12.0             # set to your motor's rated supply
-VOLT_TOLERANCE = 0.15           # 15% swing either side is a warning
+# The videos show sensor-reported voltage, not a verified 12 V supply reading.
+VOLT_REFERENCE = 1.306
+VOLTAGE_CALIBRATED = False      # enable only after divider/multimeter calibration
+VOLT_NOMINAL = 12.0
+VOLT_TOLERANCE = 0.15
 VOLT_FAULT_TOLERANCE = 0.25
 
 # ----------------------------------------------------------------------
@@ -53,55 +51,52 @@ STATUS_WARNING = "WARNING"
 STATUS_FAULT = "FAULT"
 
 
-def _clamp(value, low, high):
-    return max(low, min(high, value))
+def vibration_status(value):
+    """Compare with the two observed ranges; do not extrapolate a diagnosis."""
+    if VIB_NORMAL_MIN <= value <= VIB_NORMAL_MAX:
+        return STATUS_NORMAL
+    if VIB_MISALIGN_MIN <= value <= VIB_MISALIGN_MAX:
+        return STATUS_FAULT
+    return STATUS_WARNING
 
 
 def classify(vibration, temperature, voltage):
-    """Turn one raw reading into a status, a 0-100 health score and a reason.
+    """Return experimental status, category score, and explanation.
 
-    This is the rule-based stage. Once you have collected a few hours of
-    labelled NORMAL and FAULT data in Supabase, you can train a model on
-    that history and swap it in here without touching anything else.
+    The legacy database field `health` stores a category score, not health %.
     """
-    reasons = []
-    level = 0  # 0 normal, 1 warning, 2 fault
+    import math
 
-    # --- vibration: the primary indicator for imbalance and misalignment ---
-    if vibration >= VIB_FAULT:
-        level = max(level, 2)
-        reasons.append(f"Vibration {vibration:.2f} mm/s above fault limit")
-    elif vibration >= VIB_WARN:
-        level = max(level, 1)
-        reasons.append(f"Vibration {vibration:.2f} mm/s rising")
+    if not all(isinstance(v, (int, float)) and math.isfinite(v)
+               for v in (vibration, temperature, voltage)):
+        return STATUS_WARNING, 60, "Invalid sensor reading; cannot classify setup"
 
-    # --- temperature: bearings heat up as misalignment loads them ---
+    status = vibration_status(vibration)
+    level = {STATUS_NORMAL: 0, STATUS_WARNING: 1, STATUS_FAULT: 2}[status]
+    if status == STATUS_NORMAL:
+        reasons = ["Matches original-setup vibration reference (provisional)"]
+    elif status == STATUS_FAULT:
+        reasons = ["Matches 2-3 mm shim misalignment reference (provisional)"]
+    else:
+        reasons = ["Outside both recorded vibration ranges; unclassified"]
+
     if temperature >= TEMP_FAULT:
-        level = max(level, 2)
-        reasons.append(f"Temperature {temperature:.1f} C above fault limit")
+        level = 2
+        reasons.append(f"Temperature {temperature:.1f} C above existing fault limit")
     elif temperature >= TEMP_WARN:
         level = max(level, 1)
-        reasons.append(f"Temperature {temperature:.1f} C rising")
+        reasons.append(f"Temperature {temperature:.1f} C above existing warning limit")
 
-    # --- voltage: a sagging or spiking supply stresses the whole system ---
-    deviation = abs(voltage - VOLT_NOMINAL) / VOLT_NOMINAL if VOLT_NOMINAL else 0
-    if deviation >= VOLT_FAULT_TOLERANCE:
-        level = max(level, 2)
-        reasons.append(f"Supply {voltage:.2f} V is {deviation * 100:.0f}% off nominal")
-    elif deviation >= VOLT_TOLERANCE:
-        level = max(level, 1)
-        reasons.append(f"Supply {voltage:.2f} V drifting")
+    if VOLTAGE_CALIBRATED and VOLT_NOMINAL > 0:
+        deviation = abs(voltage - VOLT_NOMINAL) / VOLT_NOMINAL
+        if deviation >= VOLT_FAULT_TOLERANCE:
+            level = 2
+            reasons.append(f"Supply {voltage:.3f} V outside fault tolerance")
+        elif deviation >= VOLT_TOLERANCE:
+            level = max(level, 1)
+            reasons.append(f"Supply {voltage:.3f} V outside warning tolerance")
+    else:
+        reasons.append("Voltage calibration unverified; supply faults not evaluated")
 
-    # --- health score: how much margin is left before a fault ---
-    vib_penalty = _clamp(
-        (vibration - VIB_WARN) / max(VIB_FAULT - VIB_WARN, 0.01) * 55, 0, 60
-    )
-    temp_penalty = _clamp(
-        (temperature - TEMP_WARN) / max(TEMP_FAULT - TEMP_WARN, 0.01) * 30, 0, 35
-    )
-    volt_penalty = _clamp(deviation / max(VOLT_FAULT_TOLERANCE, 0.01) * 20, 0, 25)
-    health = int(round(_clamp(100 - vib_penalty - temp_penalty - volt_penalty, 0, 100)))
-
-    status = [STATUS_NORMAL, STATUS_WARNING, STATUS_FAULT][level]
-    note = "; ".join(reasons) if reasons else "All readings within limits"
-    return status, health, note
+    # Explicit category scores only; no unsupported physical health estimate.
+    return [STATUS_NORMAL, STATUS_WARNING, STATUS_FAULT][level], [100, 60, 20][level], "; ".join(reasons)

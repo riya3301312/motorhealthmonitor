@@ -100,12 +100,12 @@ def simulate_reading(fault=False):
     t = _sim_clock["t"]
     drift = min(t / 90.0, 1.0) if fault else 0.0
 
-    vibration = 1.2 + 0.25 * math.sin(t / 4) + random.uniform(-0.1, 0.1)
-    vibration += drift * 7.0
-    temperature = 38 + 2 * math.sin(t / 25) + random.uniform(-0.4, 0.4)
-    temperature += drift * 40
-    voltage = config.VOLT_NOMINAL + random.uniform(-0.15, 0.15)
-    voltage -= drift * config.VOLT_NOMINAL * 0.2
+    normal_mid = (config.VIB_NORMAL_MIN + config.VIB_NORMAL_MAX) / 2
+    shim_mid = (config.VIB_MISALIGN_MIN + config.VIB_MISALIGN_MAX) / 2
+    vibration = normal_mid + drift * (shim_mid - normal_mid)
+    vibration += math.sin(t / 4) + random.uniform(-0.2, 0.2)
+    temperature = 33.3 - 0.4 * drift
+    voltage = config.VOLT_NOMINAL if config.VOLTAGE_CALIBRATED else config.VOLT_REFERENCE
 
     return round(vibration, 3), round(temperature, 2), round(voltage, 3)
 
@@ -150,10 +150,10 @@ def upload(batch):
     row = max(batch, key=lambda item: item["ts"])
     print(
         f"Uploaded {row['ts']} (UTC)  "
-        f"{row['status']:<8} health {row['health']:>3}  "
-        f"vib {row['vibration']:6.2f} mm/s  "
+        f"{row['status']:<8} score {row['health']:>3}  "
+        f"vib {row['vibration']:7.3f} mm/s  "
         f"temp {row['temperature']:5.1f} C  "
-        f"volt {row['voltage']:5.2f} V",
+        f"volt {row['voltage']:6.3f} V",
         flush=True,
     )
     return True
@@ -165,7 +165,7 @@ def upload(batch):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--simulate", action="store_true", help="run without hardware")
-    parser.add_argument("--fault", action="store_true", help="simulate a growing fault")
+    parser.add_argument("--fault", action="store_true", help="simulate transition from normal to shim-reference vibration")
     args = parser.parse_args()
 
     port = None if args.simulate else open_serial()

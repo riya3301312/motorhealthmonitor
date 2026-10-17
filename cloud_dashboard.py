@@ -222,6 +222,19 @@ if data.empty:
     )
     st.stop()
 
+# Re-evaluate the displayed window without rewriting stored history.
+for column in ("status", "health", "note"):
+    data[f"stored_{column}"] = data[column]
+classified = [config.classify(row.vibration, row.temperature, row.voltage)
+              for row in data.itertuples()]
+data[["status", "health", "note"]] = pd.DataFrame(classified, index=data.index)
+data["classification_profile"] = config.CLASSIFICATION_PROFILE
+st.info(
+    "Experimental reference: NORMAL = original setup; FAULT = 2–3 mm shim range "
+    "or a temperature fault; WARNING = unclassified range or temperature warning. "
+    "Reference bands come from short videos, not validated safety limits. "
+    "Vibration units follow firmware output; physical calibration is unverified."
+)
 latest = data.iloc[-1]
 st.caption(f"Latest uploaded reading (UTC): {latest['ts'].isoformat()}")
 age = (datetime.now(timezone.utc) - latest["ts"].to_pydatetime()).total_seconds()
@@ -280,18 +293,18 @@ def band_colour(value, warn, fault):
 
 
 vib, temp, volt = latest["vibration"], latest["temperature"], latest["voltage"]
-volt_dev = abs(volt - config.VOLT_NOMINAL) / config.VOLT_NOMINAL
+volt_dev = abs(volt - config.VOLT_NOMINAL) / config.VOLT_NOMINAL if config.VOLT_NOMINAL > 0 else 0
 
 col_a, col_b, col_c = st.columns(3, gap="medium")
 with col_a:
     st.markdown(
         card(
             "Vibration",
-            f"{vib:.2f}",
+            f"{vib:.3f}",
             "mm/s RMS",
-            vib / (config.VIB_FAULT * 1.3),
-            band_colour(vib, config.VIB_WARN, config.VIB_FAULT),
-            f"warn {config.VIB_WARN}  ·  fault {config.VIB_FAULT}  ·  ISO 10816",
+            vib / config.VIB_MISALIGN_MAX,
+            PALETTE[config.vibration_status(vib).lower()],
+            f"normal {config.VIB_NORMAL_MIN:.3f}–{config.VIB_NORMAL_MAX:.3f} · shim {config.VIB_MISALIGN_MIN:.3f}–{config.VIB_MISALIGN_MAX:.3f}",
         ),
         unsafe_allow_html=True,
     )
@@ -310,12 +323,12 @@ with col_b:
 with col_c:
     st.markdown(
         card(
-            "Supply voltage",
-            f"{volt:.2f}",
+            "Supply voltage" if config.VOLTAGE_CALIBRATED else "Reported voltage",
+            f"{volt:.3f}",
             "V",
-            volt_dev / config.VOLT_FAULT_TOLERANCE,
-            band_colour(volt_dev, config.VOLT_TOLERANCE, config.VOLT_FAULT_TOLERANCE),
-            f"nominal {config.VOLT_NOMINAL} V  ·  drift {volt_dev * 100:.0f}%",
+            volt_dev / config.VOLT_FAULT_TOLERANCE if config.VOLTAGE_CALIBRATED else 0,
+            band_colour(volt_dev, config.VOLT_TOLERANCE, config.VOLT_FAULT_TOLERANCE) if config.VOLTAGE_CALIBRATED else PALETTE["muted"],
+            (f"nominal {config.VOLT_NOMINAL} V · drift {volt_dev * 100:.0f}%" if config.VOLTAGE_CALIBRATED else "Calibration unverified · supply faults not evaluated"),
         ),
         unsafe_allow_html=True,
     )
@@ -332,7 +345,7 @@ st.markdown(
     f"""
 <div class="meter-wrap">
   <div class="meter-head">
-    <span class="lbl">Overall health</span>
+    <span class="lbl">Experimental status score</span>
     <span class="val" style="color:{health_colour}">{health}<span
       style="font-size:.9rem;color:{PALETTE['muted']}"> / 100</span></span>
   </div>
@@ -340,7 +353,7 @@ st.markdown(
     <div class="meter-needle" style="left:{health}%"></div>
   </div>
   <div class="meter-ticks">
-    <span>0 · failed</span><span>30</span><span>65</span><span>100 · as new</span>
+    <span>20 · fault</span><span>60 · warning / unclassified</span><span>100 · normal reference</span>
   </div>
 </div>
 """,
@@ -392,14 +405,20 @@ def trend(series_name, title, unit, warn=None, fault=None):
         yaxis=dict(gridcolor=PALETTE["line"], title=None, zeroline=False),
         showlegend=False,
     )
+    if series_name == "vibration":
+        for low, high, colour, label in (
+            (config.VIB_NORMAL_MIN, config.VIB_NORMAL_MAX, PALETTE["normal"], "normal observed"),
+            (config.VIB_MISALIGN_MIN, config.VIB_MISALIGN_MAX, PALETTE["fault"], "shim observed"),
+        ):
+            fig.add_hrect(y0=low, y1=high, fillcolor=colour, opacity=0.12,
+                          line_width=0, annotation_text=label)
     return fig
 
 
 t1, t2 = st.columns(2, gap="medium")
 with t1:
     st.plotly_chart(
-        trend("vibration", "Vibration  ·  mm/s RMS", "mm/s",
-              config.VIB_WARN, config.VIB_FAULT),
+        trend("vibration", "Reported vibration · mm/s RMS", "mm/s"),
         use_container_width=True,
     )
 with t2:
@@ -410,7 +429,7 @@ with t2:
     )
 
 st.plotly_chart(
-    trend("health", "Overall health  ·  score", "pts"),
+    trend("health", "Experimental status score  ·  score", "pts"),
     use_container_width=True,
 )
 
@@ -435,8 +454,9 @@ else:
 
 st.markdown('<p class="sec-head">Training data</p>', unsafe_allow_html=True)
 st.caption(
-    "Every reading is kept. Export the history to train a model on real "
-    "normal-versus-fault behaviour later."
+    "Export the displayed history window. Labels use the current experimental "
+    "profile; stored_status, stored_health and stored_note retain upload-time labels. "
+    "Automatic classifications are not verified training ground truth."
 )
 st.download_button(
     "Download history as CSV",
