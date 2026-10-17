@@ -18,18 +18,18 @@ UPLOAD_INTERVAL_SEC = LIVE_INTERVAL_SEC
 DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 
 # ----------------------------------------------------------------------
-# Vibration bands set by the user (firmware units, 0-200 full scale):
-#     0.000   - 50.000   healthy
-#     50.001  - 200.000  faulty
-# Bounds are inclusive; anything outside 0-200 (negative, over range) is
+# Vibration bands set by the user (firmware units, 0-2000 full scale):
+#     0.000   - 650.000  healthy
+#     650.001 - 2000.000 faulty
+# Bounds are inclusive; anything outside 0-2000 (negative, over range) is
 # unclassified and raises a WARNING. Not validated safety limits.
 # Firmware reports mm/s RMS, but its physical calibration is unverified.
 # ----------------------------------------------------------------------
 VIB_NORMAL_MIN = 0.000
-VIB_NORMAL_MAX = 50.000
-VIB_MISALIGN_MIN = 50.001
-VIB_MISALIGN_MAX = 200.000
-CLASSIFICATION_PROFILE = "range-0-50-200-2026-10-17"
+VIB_NORMAL_MAX = 650.000
+VIB_MISALIGN_MIN = 650.001
+VIB_MISALIGN_MAX = 2000.000
+CLASSIFICATION_PROFILE = "range-0-650-2000-2026-10-17"
 
 TEMP_WARN = 60.0                # existing limits, not inferred from these clips
 TEMP_FAULT = 75.0
@@ -58,7 +58,7 @@ def vibration_status(value):
     """Healthy up to VIB_NORMAL_MAX, faulty above it up to VIB_MISALIGN_MAX."""
     if VIB_NORMAL_MIN <= value <= VIB_NORMAL_MAX:
         return STATUS_NORMAL
-    if VIB_NORMAL_MAX < value <= VIB_MISALIGN_MAX:  # no gap, e.g. 50.0004
+    if VIB_NORMAL_MAX < value <= VIB_MISALIGN_MAX:  # no gap, e.g. 650.0004
         return STATUS_FAULT
     return STATUS_WARNING
 

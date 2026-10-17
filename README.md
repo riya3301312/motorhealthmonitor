@@ -83,8 +83,8 @@ extrema, not statistical confidence intervals or validated safety thresholds.
 | 4.27.45 PM: original setup | 5.064–17.770 | 33.30 C | approximately 1.306–1.348 V |
 
 Current configured vibration bands (set by the user, firmware units):
-HEALTHY 0.000–50.000, FAULTY 50.001–200.000, inclusive. Values below 0 or
-above 200 are unclassified and raise a WARNING; there is no gap between the
+HEALTHY 0.000–650.000, FAULTY 650.001–2000.000, inclusive. Values below 0 or
+above 2000 are unclassified and raise a WARNING; there is no gap between the
 two bands. The video ranges above are kept as reference only.
 
 The bands are not validated safety limits, and a FAULTY reading does not
