@@ -231,8 +231,9 @@ data[["status", "health", "note"]] = pd.DataFrame(classified, index=data.index)
 data["classification_profile"] = config.CLASSIFICATION_PROFILE
 st.info(
     f"Vibration bands: NORMAL = {config.VIB_NORMAL_MIN:.3f}–{config.VIB_NORMAL_MAX:.3f}; "
-    f"FAULT = {config.VIB_MISALIGN_MIN:.3f}–{config.VIB_MISALIGN_MAX:.3f} or a temperature fault; "
-    "WARNING = out of range or temperature warning. Not validated safety limits. "
+    f"WARNING = {config.VIB_WARN_MIN:.3f}–{config.VIB_WARN_MAX:.3f}, out of range or a temperature warning; "
+    f"FAULT = {config.VIB_MISALIGN_MIN:.3f}–{config.VIB_MISALIGN_MAX:.3f} or a temperature fault. "
+    "Not validated safety limits. "
     "Vibration units follow firmware output; physical calibration is unverified."
 )
 latest = data.iloc[-1]
@@ -304,7 +305,7 @@ with col_a:
             "mm/s RMS",
             vib / config.VIB_MISALIGN_MAX,
             PALETTE[config.vibration_status(vib).lower()],
-            f"healthy {config.VIB_NORMAL_MIN:.3f}–{config.VIB_NORMAL_MAX:.3f} · faulty {config.VIB_MISALIGN_MIN:.3f}–{config.VIB_MISALIGN_MAX:.3f}",
+            f"normal {config.VIB_NORMAL_MIN:.3f}–{config.VIB_NORMAL_MAX:.3f} · warn {config.VIB_WARN_MIN:.3f}–{config.VIB_WARN_MAX:.3f} · fault {config.VIB_MISALIGN_MIN:.3f}–{config.VIB_MISALIGN_MAX:.3f}",
         ),
         unsafe_allow_html=True,
     )
@@ -407,8 +408,9 @@ def trend(series_name, title, unit, warn=None, fault=None):
     )
     if series_name == "vibration":
         for low, high, colour, label in (
-            (config.VIB_NORMAL_MIN, config.VIB_NORMAL_MAX, PALETTE["normal"], "healthy"),
-            (config.VIB_MISALIGN_MIN, config.VIB_MISALIGN_MAX, PALETTE["fault"], "faulty"),
+            (config.VIB_NORMAL_MIN, config.VIB_NORMAL_MAX, PALETTE["normal"], "normal"),
+            (config.VIB_WARN_MIN, config.VIB_WARN_MAX, PALETTE["warning"], "warning"),
+            (config.VIB_MISALIGN_MIN, config.VIB_MISALIGN_MAX, PALETTE["fault"], "fault"),
         ):
             fig.add_hrect(y0=low, y1=high, fillcolor=colour, opacity=0.12,
                           line_width=0, annotation_text=label)

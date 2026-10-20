@@ -18,18 +18,21 @@ UPLOAD_INTERVAL_SEC = LIVE_INTERVAL_SEC
 DASHBOARD_REFRESH_MS = round(LIVE_INTERVAL_SEC * 1000)
 
 # ----------------------------------------------------------------------
-# Vibration bands set by the user (firmware units, 0-2000 full scale):
-#     0.000   - 650.000  healthy
-#     650.001 - 2000.000 faulty
-# Bounds are inclusive; anything outside 0-2000 (negative, over range) is
-# unclassified and raises a WARNING. Not validated safety limits.
+# Vibration bands set by the user (firmware units, 0-5000 full scale):
+#     0.000    - 650.000   normal
+#     650.001  - 2500.000  warning
+#     2500.001 - 5000.000  faulty
+# Bounds are inclusive; anything outside 0-5000 (negative, over range) is
+# unclassified and also raises a WARNING. Not validated safety limits.
 # Firmware reports mm/s RMS, but its physical calibration is unverified.
 # ----------------------------------------------------------------------
 VIB_NORMAL_MIN = 0.000
 VIB_NORMAL_MAX = 650.000
-VIB_MISALIGN_MIN = 650.001
-VIB_MISALIGN_MAX = 2000.000
-CLASSIFICATION_PROFILE = "range-0-650-2000-2026-10-17"
+VIB_WARN_MIN = 650.001
+VIB_WARN_MAX = 2500.000
+VIB_MISALIGN_MIN = 2500.001   # fault band
+VIB_MISALIGN_MAX = 5000.000
+CLASSIFICATION_PROFILE = "range-0-650-2500-5000-2026-10-17"
 
 TEMP_WARN = 60.0                # existing limits, not inferred from these clips
 TEMP_FAULT = 75.0
@@ -55,12 +58,14 @@ STATUS_FAULT = "FAULT"
 
 
 def vibration_status(value):
-    """Healthy up to VIB_NORMAL_MAX, faulty above it up to VIB_MISALIGN_MAX."""
+    """Normal / warning / fault bands; each starts where the previous ends."""
     if VIB_NORMAL_MIN <= value <= VIB_NORMAL_MAX:
         return STATUS_NORMAL
-    if VIB_NORMAL_MAX < value <= VIB_MISALIGN_MAX:  # no gap, e.g. 650.0004
+    if VIB_NORMAL_MAX < value <= VIB_WARN_MAX:  # no gap, e.g. 650.0004
+        return STATUS_WARNING
+    if VIB_WARN_MAX < value <= VIB_MISALIGN_MAX:
         return STATUS_FAULT
-    return STATUS_WARNING
+    return STATUS_WARNING  # negative or over range
 
 
 def classify(vibration, temperature, voltage):
@@ -80,6 +85,8 @@ def classify(vibration, temperature, voltage):
         reasons = [f"Vibration within healthy range ({VIB_NORMAL_MIN:.3f}-{VIB_NORMAL_MAX:.3f})"]
     elif status == STATUS_FAULT:
         reasons = [f"Vibration in faulty range ({VIB_MISALIGN_MIN:.3f}-{VIB_MISALIGN_MAX:.3f})"]
+    elif VIB_NORMAL_MAX < vibration <= VIB_WARN_MAX:
+        reasons = [f"Vibration in warning range ({VIB_WARN_MIN:.3f}-{VIB_WARN_MAX:.3f})"]
     else:
         reasons = [f"Vibration outside {VIB_NORMAL_MIN:.0f}-{VIB_MISALIGN_MAX:.0f} range; unclassified"]
 
