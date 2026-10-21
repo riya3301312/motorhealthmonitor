@@ -73,7 +73,6 @@ def open_serial():
             "Serial Monitor if it is open — only one program can hold the port."
         )
     time.sleep(2)  # the ESP32 resets when the port opens
-    port.reset_input_buffer()
     print(f"Listening on {config.SERIAL_PORT} at {config.BAUD_RATE} baud")
     return port
 
@@ -84,12 +83,15 @@ def read_serial_line(port):
     if not raw:
         return None
     parts = [p.strip() for p in raw.split(",")]
-    if len(parts) < 3:
-        return None
     try:
+        if len(parts) < 3:
+            raise ValueError
         values = float(parts[0]), float(parts[1]), float(parts[2])
     except ValueError:
-        return None  # startup banner or debug text, ignore it
+        # banner, error text such as ERROR_MPU6050, or a malformed line:
+        # show it instead of hiding why no readings arrive
+        print(f"  ESP32 says: {raw}", flush=True)
+        return None
     # a failed sensor can print nan/inf; JSON can't carry them and one bad row
     # would block every later upload
     return values if all(math.isfinite(v) for v in values) else None
@@ -181,6 +183,7 @@ def main():
     buffer = []
     pending = []          # readings that failed to upload, retried next flush
     last_flush = time.monotonic()
+    last_reading = time.monotonic()
 
     try:
         while True:
@@ -191,6 +194,7 @@ def main():
                 reading = read_serial_line(port)
 
             if reading:
+                last_reading = time.monotonic()
                 vibration, temperature, voltage = reading
                 status, health, note = config.classify(vibration, temperature, voltage)
                 row = {
@@ -205,6 +209,11 @@ def main():
                 }
                 buffer.append(row)
                 append_local_csv(row)
+
+            if not args.simulate and time.monotonic() - last_reading > 10:
+                print("  No valid readings for 10 s - check the ESP32 sensor wiring, "
+                      "firmware and baud rate.", flush=True)
+                last_reading = time.monotonic()
 
             if time.monotonic() - last_flush >= config.UPLOAD_INTERVAL_SEC and (buffer or pending):
                 batch = pending + buffer
